@@ -1,0 +1,7 @@
+.vscode/
+./*/vscode/
+.DS_Store
+site/
+.idea/
+./*/.gdbinit
+*.o
