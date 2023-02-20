@@ -1,6 +1,7 @@
 // trap.c 
 #include "printk.h"
 #include "clock.h"
+#include "proc.h"
 
 void trap_handler(unsigned long scause, unsigned long sepc) {
     // 通过 `scause` 判断trap类型
@@ -18,6 +19,7 @@ void trap_handler(unsigned long scause, unsigned long sepc) {
             // supervisor timer interrupt
             printk("[S]: Supervisor timer interrupt\n");
             clock_set_next_event();
+            do_timer();
         }
     }
 

@@ -4,7 +4,9 @@
     .globl _start
 _start:
     la sp, boot_stack_top
-
+    
+    call mm_init
+    call task_init
     # set stvec = _traps
     la t0, _traps
     csrw stvec, t0
@@ -36,8 +38,6 @@ _start:
     li t0, 0x2
     csrs sstatus, t0
     # ------------------
-
-    call mm_init
 
     # ------------------
     j start_kernel
