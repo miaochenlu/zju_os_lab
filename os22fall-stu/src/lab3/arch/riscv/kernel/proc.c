@@ -86,22 +86,53 @@ void do_timer(void) {
     }
 }
 
+#ifdef SJF
 void schedule(void) {
-    int minTime = 0xfff;
-    int minIndex = -1;
+    int sjf = 0xfff;
+    int next_index = -1;
     for(int i = 1; i < NR_TASKS; i++) {
-        if(task[i]->counter < minTime && task[i]->counter > 0) {
-            minTime = task[i]->counter;
-            minIndex = i;
+        if(task[i]->counter < sjf && task[i]->counter > 0) {
+            sjf = task[i]->counter;
+            next_index = i;
         }
     }
 
-    if(minIndex == -1) {
+    if(next_index == -1) {
         for(int i = 1; i < NR_TASKS; i++) {
             task[i]->counter = rand();
+            printk("SET [PID = %d COUNTER = %d]\n", i, task[i]->counter);
         }
         schedule();
     } else{
-        switch_to(task[minIndex]);
+        printk("switch to [PID = %d COUNTER = %d ]\n", next_index, task[next_index]->counter);
+        switch_to(task[next_index]);
     }
 }
+#endif
+
+#ifdef PRIORITY
+void schedule(void) {
+    int max_priority = 0;
+    int next_index = -1;
+
+    for(int i = 1; i < NR_TASKS; i++) {
+            if(task[i]->counter > 0 && task[i]->priority > max_priority) {
+            max_priority = task[i]->priority;
+            next_index = i;
+        }
+    }
+
+    if(next_index == -1) {
+        for(int i = 1; i < NR_TASKS; i++) {
+            task[i]->counter = rand();
+            printk("SET [PID = %d PRIORITY = %d COUNTER = %d]\n", 
+                i, task[i]->priority, task[i]->counter);
+        }
+        schedule();
+    } else {
+        printk("switch to [PID = %d PRIORITY = %d COUNTER = %d ]\n", 
+            next_index, task[next_index]->priority, task[next_index]->counter);
+        switch_to(task[next_index]);
+    }
+}
+#endif
