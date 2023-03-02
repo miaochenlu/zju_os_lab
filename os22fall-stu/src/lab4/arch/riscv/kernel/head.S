@@ -5,7 +5,11 @@
 _start:
     la sp, boot_stack_top
     
+    call setup_vm
+    call relocate
     call mm_init
+    call setup_vm_final
+
     call task_init
     # set stvec = _traps
     la t0, _traps
@@ -42,6 +46,41 @@ _start:
     # ------------------
     j start_kernel
     # ------------------
+
+relocate:
+    # set ra = ra + PA2VA_OFFSET
+    # set sp = sp + PA2VA_OFFSET (If you have set the sp before)
+
+    ###################### 
+    #   YOUR CODE HERE   #
+    ######################
+
+    li t0, 0xffffffe000000000
+    li t1, 0x80000000
+    sub t2, t0, t1
+
+    add ra, ra, t2
+    add sp, sp, t2
+    
+    # set satp with early_pgtbl
+    la t0, early_pgtbl
+    srli t0, t0, 12 
+
+    # setup mode
+    li t1, 1
+    slli t1, t1, 63
+
+    or t0, t0, t1
+
+    csrw satp, t0
+
+    # flush tlb
+    sfence.vma zero, zero
+
+    # flush icache
+    fence.i
+
+    ret
 
     .section .bss.stack
     .globl boot_stack
