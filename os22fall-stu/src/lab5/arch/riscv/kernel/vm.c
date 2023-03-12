@@ -1,8 +1,6 @@
-#include "mm.h"
 #include "defs.h"
 #include "types.h"
 #include "string.h"
-#include "printk.h"
 
 extern char _stext[];
 extern char _etext[];
