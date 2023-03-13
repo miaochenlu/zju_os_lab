@@ -56,13 +56,4 @@
 #define USER_START (0x0000000000000000) // user space start virtual address
 #define USER_END   (0x0000004000000000) // user space end virtual address
 
-
-#define PAGE_ENTRY_NUM 0x200  // 512 bytes
-#define WritePTE(__pte_addr,__ppn_to_write, __perm, __V)                                                                   \
-{                                                                                                                                                                                               \
-        *__pte_addr =   ((unsigned long)(*(__pte_addr)) & 0xffc0000000000000) |                                                    \
-                                                ((unsigned long)(__ppn_to_write) << 10) | ((unsigned long)(__perm) | (unsigned long)(__V));             \
-}
-
-#define U64ADDR(num) ((unsigned long)&num)
 #endif

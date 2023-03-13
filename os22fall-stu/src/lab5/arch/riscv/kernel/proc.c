@@ -4,6 +4,8 @@
 #include "defs.h"
 #include "rand.h"
 #include "printk.h"
+#include "elf.h"
+#include "string.h"
 
 extern char uapp_start[];
 extern char uapp_end[];
@@ -15,6 +17,46 @@ extern void create_mapping(pagetable_t pgtbl, uint64 va, uint64 pa, uint64 sz, i
 struct task_struct* idle;           // idle process
 struct task_struct* current;        // 指向当前运行线程的 `task_struct`
 struct task_struct* task[NR_TASKS]; // 线程数组, 所有的线程都保存在此
+
+static uint64_t load_program(struct task_struct* task) {
+    pte_t* user_pgtable = (pte_t*)alloc_page();
+    for(int i = 0; i < 512; i++) {
+        user_pgtable[i] = swapper_pg_dir[i];
+    }
+    task->pgd = (uint64*)((uint64)user_pgtable - PA2VA_OFFSET);
+
+    Elf64_Ehdr* ehdr = (Elf64_Ehdr*)uapp_start;
+
+    uint64_t phdr_start = (uint64_t)ehdr + ehdr->e_phoff;
+    uint64_t phdr_cnt = ehdr->e_phnum;
+
+    Elf64_Phdr* phdr;
+    int load_phdr_cnt = 0;
+
+    for (int i = 0; i < phdr_cnt; i++) {
+        phdr = (Elf64_Phdr *)(phdr_start + sizeof(Elf64_Phdr) * i);
+        if (phdr->p_type == PT_LOAD) {
+            uint64 page_count = PGROUNDUP(phdr->p_memsz) / PGSIZE;
+            uint64 valloc_addr = alloc_pages(page_count);
+            uint64 load_addr = (uint64)uapp_start + phdr->p_offset;
+            create_mapping(user_pgtable, USER_START, valloc_addr - PA2VA_OFFSET,
+                           phdr->p_memsz, phdr->p_flags | PTE_X);
+            memcpy((uint64*)valloc_addr, (uint64*)load_addr, phdr->p_memsz);
+        }
+    }
+
+    uint64* user_stack = (uint64*)alloc_page();
+    create_mapping(user_pgtable, USER_END-PGSIZE, (uint64)user_stack - PA2VA_OFFSET, 
+                    PGSIZE, PTE_V | PTE_R | PTE_W | PTE_U);
+
+
+    uint64 sstatus          = csr_read(sstatus);
+    task->thread.sstatus    = sstatus | 0x40020;
+    task->thread.sepc       = ehdr->e_entry;
+    task->thread.sscratch   = USER_END;
+
+    return user_pgtable;
+}
 
 void task_init() {
     // 1. 调用 kalloc() 为 idle 分配一个物理页
@@ -43,33 +85,7 @@ void task_init() {
         task[i]->thread.sp = (uint64)(task[i]) + PGSIZE;
         // task[i]->thread.sp = (uint64)(task[i] + PGSIZE); 好离谱的错误呀，我真的没看出来 
         
-        uint64* user_stack = (uint64*)alloc_page();
-
-        pte_t* user_pgtable = (pte_t*)alloc_page();
-        printk("userpage: %d\n", user_pgtable);
-        for(int i = 0; i < 512; i++) {
-            user_pgtable[i] = swapper_pg_dir[i];
-        }
-        printk("userpage: %d\n", user_pgtable);
-        create_mapping(user_pgtable, USER_START, (uint64)uapp_start - PA2VA_OFFSET, 
-                        uapp_end - uapp_start, PTE_V | PTE_R | PTE_W | PTE_X | PTE_U);
-        create_mapping(user_pgtable, USER_END-PGSIZE, (uint64)user_stack - PA2VA_OFFSET, 
-                        PGSIZE, PTE_V | PTE_R | PTE_W | PTE_U);
-        
-        uint64 sstatus = csr_read(sstatus);
-        task[i]->thread.sstatus     = sstatus | 0x40020; // 40020
-        csr_write(sstatus, task[i]->thread.sstatus);
-        task[i]->thread.sepc        = USER_START;
-        task[i]->thread.sscratch    = USER_END;
-        // task[i]->pgd                = (uint64)user_pgtable - PA2VA_OFFSET;
-        // uint64 satp = csr_read(satp);
-        // printk("original satp: %lx\n", satp);
-        // uint64 PPN = (uint64)((uint64)user_pgtable - PA2VA_OFFSET) >> 12;
-        // satp = (satp >> 44) << 44;
-        // satp |= PPN;
-        task[i]->pgd = (uint64)user_pgtable - PA2VA_OFFSET;
-        // printk("i: %d PPN: %lx satp: %lx\n===\n", i, PPN, satp);
-
+        load_program(task[i]);
     }
 
     printk("...proc_init done!\n");
